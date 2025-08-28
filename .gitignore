@@ -1,16 +1,13 @@
-# Python environment & cache
 venv/
 __pycache__/
 *.pyc
 
-# Local environment files
 .env
 
-# Firebase/Google/Stripe/OpenAI secrets
 *.json
+*.key
+*.pem
 
-# Node junk (if package.json is in backend)
 node_modules/
-mindly-firebase-admin.json
-.env
-.env
+
+/static/*.mp3
