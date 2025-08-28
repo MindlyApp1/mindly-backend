@@ -5,10 +5,9 @@ import re
 import os
 from google.cloud import texttospeech
 import stripe
-from flask_cors import CORS, cross_origin
+from flask_cors import CORS
 import firebase_admin
 from firebase_admin import credentials, firestore
-import json, hashlib
 import uuid
 from dotenv import load_dotenv
 
@@ -16,21 +15,7 @@ load_dotenv()
 
 app = Flask(__name__)
 
-CORS(
-    app,
-    resources={r"/*": {"origins": ["http://localhost:3000", "https://mindly-frontend.onrender.com"]}},
-    supports_credentials=True
-)
-
-@app.after_request
-def add_cors_headers(response):
-    origin = request.headers.get("Origin")
-    allowed = ["http://localhost:3000", "https://mindly-frontend.onrender.com"]
-    if origin in allowed:
-        response.headers["Access-Control-Allow-Origin"] = origin
-    response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
-    response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
-    return response
+CORS(app, resources={r"/*": {"origins": "http://localhost:3000"}})
 
 openai.api_key = os.getenv("OPENAI_API_KEY")
 stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
@@ -140,8 +125,9 @@ def run_suggestions(messages):
 
     prompt = f"""
 From this chat, output JSON with:
-1) session_note: 2–3 warm, reflective sentences
-2) suggestions: 4 short, practical focus points
+
+1) session_note: A warm, reflective session note (2–3 sentences) like a personal recap.
+2) suggestions: A concise list of 4 strong, practical, personalized "Focus for Improvement" suggestions.
 
 Return JSON only:
 {{"session_note": "...", "suggestions": ["...", "...", "...", "..."]}}
@@ -549,7 +535,6 @@ def create_subscription():
         print(f"[create-subscription] Error: {e}")
         return jsonify({"error": str(e)}), 500
 
-@cross_origin(origin='localhost', headers=['Content-Type', 'Authorization'])
 @app.route("/cancel-subscription", methods=["POST"])
 def cancel_subscription():
     try:
@@ -598,7 +583,7 @@ def cancel_subscription():
         print(f"[cancel-subscription] Error: {e}")
         return jsonify({"error": str(e)}), 500
 
-@app.route("/api/add-email", methods=["POST"])
+@app.route("/add-email", methods=["POST"])
 def add_email():
     try:
         data = request.get_json() or {}
@@ -615,7 +600,8 @@ def add_email():
 
         return jsonify({"success": True}), 200
     except Exception as e:
-        print("[/api/add-email] error:", e)
+        print("[/add-email] error:", e)
         return jsonify({"error": str(e)}), 500
 
-app.run(debug=True, port=5050)
+if __name__ == "__main__":
+    app.run(debug=True, port=5050)
