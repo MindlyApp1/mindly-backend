@@ -172,9 +172,10 @@ def speak_text(text, tone="alex"):
         print("TTS Error:", e)
         return None
 
-@app.route("/health")
+@app.route("/health", methods=["GET"])
 def health():
-    return {"status": "ok"}
+    return {"status": "ok"}, 200
+
 
 previous_responses = []
 
@@ -608,4 +609,4 @@ def add_email():
         return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
-    app.run(debug=True, port=5050)
+    app.run(debug=True, port=8000)
