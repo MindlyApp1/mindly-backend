@@ -15,7 +15,7 @@ load_dotenv()
 
 app = Flask(__name__)
 
-CORS(app, resources={r"/*": {"origins": "http://localhost:3000"}})
+CORS(app, resources={r"/*": {"origins": ["http://localhost:3000", "https://mindly-95916.web.app"]}})
 
 openai.api_key = os.getenv("OPENAI_API_KEY")
 stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
