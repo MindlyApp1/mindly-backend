@@ -172,6 +172,10 @@ def speak_text(text, tone="alex"):
         print("TTS Error:", e)
         return None
 
+@app.route("/health")
+def health():
+    return {"status": "ok"}
+
 previous_responses = []
 
 @app.route("/chat", methods=["POST"])
