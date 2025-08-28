@@ -172,10 +172,13 @@ def speak_text(text, tone="alex"):
         print("TTS Error:", e)
         return None
 
+@app.route("/", methods=["GET"])
+def index():
+    return {"status": "ok", "message": "Mindly backend is running!"}
+
 @app.route("/health", methods=["GET"])
 def health():
     return {"status": "ok"}, 200
-
 
 previous_responses = []
 
