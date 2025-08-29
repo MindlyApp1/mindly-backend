@@ -15,7 +15,13 @@ load_dotenv()
 
 app = Flask(__name__)
 
-CORS(app, resources={r"/*": {"origins": ["http://localhost:3000", "https://mindly-95916.web.app"]}})
+CORS(app, resources={r"/*": {
+    "origins": [
+        "http://localhost:3000",
+        "https://mindlyweb.com",
+        "https://www.mindlyweb.com"
+    ]
+}})
 
 openai.api_key = os.getenv("OPENAI_API_KEY")
 stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
@@ -612,4 +618,4 @@ def add_email():
         return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
-    app.run(debug=True, port=8000)
+    app.run(debug=True, port=5050)
