@@ -4,7 +4,6 @@ import difflib
 import re
 import os
 from google.cloud import texttospeech
-import stripe
 from flask_cors import CORS
 import firebase_admin
 from firebase_admin import credentials, firestore
@@ -24,7 +23,6 @@ CORS(app, resources={r"/*": {
 }})
 
 openai.api_key = os.getenv("OPENAI_API_KEY")
-stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
 
 tts_json = os.getenv("GOOGLE_APPLICATION_CREDENTIALS_TTS")
 firebase_json = os.getenv("GOOGLE_APPLICATION_CREDENTIALS_FIREBASE")
@@ -473,129 +471,6 @@ def build_prompt(user_msg, modifiers):
 
     return prompt
 
-price_id_map = {
-    "standard": "price_1RhgVqP5GIG16Xw0NLlekkEj",
-    "premium": "price_1RhgX2P5GIG16Xw0oNAh4wnh",
-}
-
-lookup_table = price_id_map.copy()
-
-@app.route("/create-checkout-session", methods=["POST"])
-def create_checkout_session():
-    try:
-        data = request.get_json()
-        print("[DEBUG] Incoming POST to /create-checkout-session with data:", data)
-
-        plan = data.get("plan")
-        price_id = lookup_table.get(plan)
-
-        if not price_id:
-            print("[ERROR] Invalid plan:", plan)
-            return jsonify({"error": "Invalid plan ID"}), 400
-
-        session = stripe.checkout.Session.create(
-            payment_method_types=["card"],
-            line_items=[{"price": price_id, "quantity": 1}],
-            mode="subscription",
-            success_url="http://localhost:3000/plans?status=success",
-            cancel_url="http://localhost:3000/plans?status=cancel",
-        )
-
-        print("[SUCCESS] Stripe session created:", session.url)
-        return jsonify({"url": session.url})
-
-    except Exception as e:
-        print("[ERROR] Stripe session creation failed:", str(e))
-        return jsonify({"error": str(e)}), 500
-
-@app.route("/create-subscription", methods=["POST"])
-def create_subscription():
-    try:
-        data = request.get_json()
-        email = data.get("email")
-        plan = data.get("plan")
-
-        if not email or plan not in price_id_map:
-            return jsonify({"error": "Invalid request data"}), 400
-
-        customers = stripe.Customer.list(email=email).data
-        customer = customers[0] if customers else stripe.Customer.create(email=email)
-
-        subscription = stripe.Subscription.create(
-            customer=customer.id,
-            items=[{"price": price_id_map[plan]}],
-            payment_behavior="default_incomplete",
-            payment_settings={"save_default_payment_method": "on_subscription"},
-            expand=["latest_invoice.payment_intent", "latest_invoice"]
-        )
-
-        db = firestore.client()
-        user_ref = db.collection("users").document(email)
-        user_ref.set({
-            "plan": plan
-        }, merge=True)
-
-        payment_intent = subscription["latest_invoice"].get("payment_intent")
-        if payment_intent:
-            return jsonify({"clientSecret": payment_intent["client_secret"]})
-        else:
-            return jsonify({
-                "message": "No immediate payment required",
-                "subscriptionId": subscription.id,
-                "invoiceId": subscription["latest_invoice"].id
-            })
-
-    except Exception as e:
-        print(f"[create-subscription] Error: {e}")
-        return jsonify({"error": str(e)}), 500
-
-@app.route("/cancel-subscription", methods=["POST"])
-def cancel_subscription():
-    try:
-        data = request.get_json()
-        email = data.get("email")
-        if not email:
-            return jsonify({"error": "Missing email."}), 400
-
-        db = firestore.client()
-        user_ref = db.collection("users").document(email)
-
-        customers = stripe.Customer.list(email=email).data
-        if not customers:
-            print("[INFO] No Stripe customer found — auto-downgrading.")
-            user_ref.set({"plan": "basic"}, merge=True)
-            return jsonify({
-                "status": "downgraded_to_basic",
-                "message": "No Stripe customer found, downgraded to Basic."
-            })
-
-        customer = customers[0]
-        subscriptions = stripe.Subscription.list(customer=customer.id, limit=10).data
-        if not subscriptions:
-            print("[INFO] No active subscription found — auto-downgrading.")
-            user_ref.set({"plan": "basic"}, merge=True)
-            return jsonify({
-                "status": "downgraded_to_basic",
-                "message": "No Stripe subscription found, downgraded to Basic."
-            })
-
-        active_sub = next((sub for sub in subscriptions if sub.status in ['active', 'trialing', 'incomplete', 'past_due']), None)
-        if active_sub:
-            stripe.Subscription.delete(active_sub.id)
-            print(f"[CANCEL] Subscription {active_sub.id} deleted.")
-        else:
-            print("[INFO] No valid subscription to cancel.")
-
-        user_ref.set({"plan": "basic"}, merge=True)
-
-        return jsonify({
-            "status": "downgraded_to_basic",
-            "message": "Subscription canceled and plan downgraded."
-        })
-
-    except Exception as e:
-        print(f"[cancel-subscription] Error: {e}")
-        return jsonify({"error": str(e)}), 500
 
 @app.route("/add-email", methods=["POST"])
 def add_email():
