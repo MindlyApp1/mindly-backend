@@ -36,10 +36,27 @@ if not firebase_admin._apps:
 db = firestore.client()
 
 VOICE_MAPPING = {
-    "alex": "en-US-Chirp3-HD-Schedar",
-    "james": "en-US-Chirp3-HD-Sadachbia",
-    "taylor": "en-US-Chirp3-HD-Aoede",
-    "jordan": "en-US-Chirp3-HD-Vindemiatrix"
+    "alex": "Chirp3-HD-Schedar",
+    "james": "Chirp3-HD-Sadachbia",
+    "taylor": "Chirp3-HD-Aoede",
+    "jordan": "Chirp3-HD-Vindemiatrix"
+}
+
+
+LANGUAGE_OPTIONS = {
+    "English": "en-US",
+    "French": "fr-FR",
+    "Spanish": "es-ES",
+    "Portuguese": "pt-BR",
+    "German": "de-DE"
+}
+
+LANGUAGE_NAMES = {
+    "en-US": "English",
+    "fr-FR": "French",
+    "es-ES": "Spanish",
+    "pt-BR": "Portuguese",
+    "de-DE": "German"
 }
 
 TONE_STYLES = {
@@ -157,15 +174,29 @@ Conversation:
             "suggestions": []
         }
 
-def speak_text(text, tone="alex"):
-    voice_name = VOICE_MAPPING.get(tone, "en-US-Wavenet-F")
-    language_code = "-".join(voice_name.split("-")[:2])
+def speak_text(text, tone="alex", language="en-US"):
+    if language not in LANGUAGE_OPTIONS.values():
+        language = "en-US"
+
+    voice_suffix = VOICE_MAPPING.get(tone, "Wavenet-F")
+
+    voice_name = f"{language}-{voice_suffix}"
+
+    language_code = "-".join(language.split("-")[:2])
+
     synthesis_input = texttospeech.SynthesisInput(text=text)
-    voice = texttospeech.VoiceSelectionParams(name=voice_name, language_code=language_code)
-    audio_config = texttospeech.AudioConfig(audio_encoding=texttospeech.AudioEncoding.MP3)
+    voice = texttospeech.VoiceSelectionParams(
+        name=voice_name,
+        language_code=language_code
+    )
+    audio_config = texttospeech.AudioConfig(
+        audio_encoding=texttospeech.AudioEncoding.MP3
+    )
 
     try:
-        response = tts_client.synthesize_speech(input=synthesis_input, voice=voice, audio_config=audio_config)
+        response = tts_client.synthesize_speech(
+            input=synthesis_input, voice=voice, audio_config=audio_config
+        )
         filename = f"static/output_{uuid.uuid4().hex}.mp3"
         with open(filename, "wb") as out:
             out.write(response.audio_content)
@@ -175,6 +206,10 @@ def speak_text(text, tone="alex"):
     except Exception as e:
         print("TTS Error:", e)
         return None
+
+@app.route("/languages", methods=["GET"])
+def languages():
+    return jsonify(LANGUAGE_OPTIONS)
 
 @app.route("/", methods=["GET"])
 def index():
@@ -227,6 +262,8 @@ def chat():
             if summary else ""
         )
 
+        language = data.get("language", "en-US")
+        lang_name = LANGUAGE_NAMES.get(language, "English")
         system_message = (
             f"{tone_style}\n"
             f"{prompt_modifiers}\n"
@@ -234,7 +271,8 @@ def chat():
             f"{summary_line}\n"
             "Avoid calling them 'User', 'client', or 'individual'. "
             "Refer to them only by their name or by 'you'. "
-            "Avoid repeating previous messages or questions."
+            "Avoid repeating previous messages or questions.\n"
+            f"IMPORTANT: Respond ONLY in {lang_name}, both text and tone."
         )
 
         history_msgs = []
@@ -270,7 +308,7 @@ def chat():
             print("ERROR:", str(e))
             ai_reply = "Error: Failed to connect to AI."
 
-    audio_path = speak_text(ai_reply, tone=tone)
+    audio_path = speak_text(ai_reply, tone=tone, language=language)
     return jsonify({"response": ai_reply, "audio_url": f"/{audio_path}"})
 
 @app.route("/summarize", methods=["POST"])
@@ -316,7 +354,8 @@ def speak():
         return jsonify({"error": "Missing message or tone"}), 400
 
     clean_message = remove_emojis(message)
-    audio_path = speak_text(clean_message, tone=tone)
+    language = data.get("language", "en-US")
+    audio_path = speak_text(clean_message, tone=tone, language=language)
 
     if not audio_path:
         return jsonify({"error": "Failed to generate speech"}), 500
@@ -357,12 +396,13 @@ def generate_title_and_suggestions():
     messages = data.get("messages", []) or []
     user_id = data.get("userId")
     chat_id = data.get("chatId")
+    language = data.get("language", "en-US")
+    lang_name = LANGUAGE_NAMES.get(language, "English")
 
     prev_title = (data.get("prev_title") or "").strip()
     prev_title_turn = data.get("prev_title_turn")
 
-    TITLE_GAP = 6 
-
+    TITLE_GAP = 2
     user_turns = [
         m for m in messages if m.get("sender") == "user" and (m.get("text") or "").strip()
     ]
@@ -382,11 +422,11 @@ def generate_title_and_suggestions():
             chat_ref = db.collection("users").document(user_id).collection("chats").document(chat_id)
             snap = chat_ref.get()
             if snap.exists:
-                data = snap.to_dict() or {}
-                session_note = data.get("session_note", "")
-                suggestions = data.get("suggestions", [])
-                title = data.get("title", title)
-                title_turn = data.get("title_turn", title_turn)
+                doc_data = snap.to_dict() or {}
+                session_note = doc_data.get("session_note", "")
+                suggestions = doc_data.get("suggestions", [])
+                title = doc_data.get("title", title)
+                title_turn = doc_data.get("title_turn", title_turn)
         except Exception as e:
             print("[generate_title_and_suggestions] Firestore fetch error:", e)
 
@@ -394,7 +434,6 @@ def generate_title_and_suggestions():
         if not session_note and not suggestions:
             session_note = default_note
             suggestions = default_suggestions
-
         return jsonify({
             "title": title or "New Chat",
             "renamed": False,
@@ -403,34 +442,64 @@ def generate_title_and_suggestions():
             "suggestions": suggestions,
         })
 
-    sug_result = run_suggestions(messages)
-    session_note = sug_result.get("session_note", "")
-    suggestions = sug_result.get("suggestions", [])
-
+    # --- Build conversation ---
     conversation = "\n".join(
         f"{'you' if m.get('sender')=='user' else 'AI'}: {m.get('text','')}"
         for m in messages if (m.get("text") or "").strip()
     )
-    prompt = (
-        "Give a 5–7 word title for this conversation. "
-        "No quotes. Don't use 'user' or 'AI'.\n\n"
-        f"{conversation}\n\nTitle:"
-    )
+
+    # --- Suggestions ---
+    sug_prompt = f"""
+    From this chat, output JSON with:
+
+    1) session_note: A warm, reflective session note (2–3 sentences).
+    2) suggestions: A concise list of 4 strong, practical "Focus for Improvement" suggestions.
+
+    Return valid JSON only.
+    Conversation:
+    {conversation}
+    """
     try:
-        completion = openai.ChatCompletion.create(
+        sug_resp = openai.ChatCompletion.create(
             model="gpt-3.5-turbo",
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=20,
+            messages=[
+                {"role": "system", "content": f"You are a supportive assistant. The working language is {lang_name}."},
+                {"role": "user", "content": sug_prompt},
+            ],
+            temperature=0.7,
+            max_tokens=350,
+        )
+        import json as _json
+        raw_sug = sug_resp["choices"][0]["message"]["content"].strip()
+        sug_result = _json.loads(raw_sug)
+        session_note = sug_result.get("session_note", "")
+        suggestions = sug_result.get("suggestions", [])
+    except Exception as e:
+        print("[generate_title_and_suggestions] Suggestion error:", e)
+        session_note, suggestions = default_note, default_suggestions
+
+    # --- Title ---
+    title_prompt = f"""
+    Give a 5–7 word conversational title for this chat.
+    No quotes, no 'user/AI'.
+    Conversation:
+    {conversation}
+    Title:
+    """
+    try:
+        title_resp = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": f"You are a supportive assistant. The working language is {lang_name}."},
+                {"role": "user", "content": title_prompt},
+            ],
+            max_tokens=30,
             temperature=0.7,
         )
-        title = completion["choices"][0]["message"]["content"].strip().strip('"').strip("'")
-
-        if title.lower().startswith("ai") or title.lower().startswith("/ai"):
-            title = title.lstrip("/").split(":", 1)[-1].strip() or "New Chat"
-
+        title = title_resp["choices"][0]["message"]["content"].strip().strip('"').strip("'")
         title_turn = cur_user_turns
     except Exception as e:
-        print("[generate_title_and_suggestions] Title generation error:", e)
+        print("[generate_title_and_suggestions] Title error:", e)
         title = prev_title or "New Chat"
 
     if user_id and chat_id:
@@ -452,6 +521,7 @@ def generate_title_and_suggestions():
         "session_note": session_note,
         "suggestions": suggestions,
     })
+
 
 def build_prompt(user_msg, modifiers):
     d = modifiers.get("directiveness", 0.5)
