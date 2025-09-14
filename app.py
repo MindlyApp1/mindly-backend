@@ -442,13 +442,11 @@ def generate_title_and_suggestions():
             "suggestions": suggestions,
         })
 
-    # --- Build conversation ---
     conversation = "\n".join(
         f"{'you' if m.get('sender')=='user' else 'AI'}: {m.get('text','')}"
         for m in messages if (m.get("text") or "").strip()
     )
 
-    # --- Suggestions ---
     sug_prompt = f"""
     From this chat, output JSON with:
 
@@ -478,7 +476,6 @@ def generate_title_and_suggestions():
         print("[generate_title_and_suggestions] Suggestion error:", e)
         session_note, suggestions = default_note, default_suggestions
 
-    # --- Title ---
     title_prompt = f"""
     Give a 5–7 word conversational title for this chat.
     No quotes, no 'user/AI'.
