@@ -187,7 +187,7 @@ def speak_text(text, tone="alex", language="en-US"):
     synthesis_input = texttospeech.SynthesisInput(text=text)
     voice = texttospeech.VoiceSelectionParams(
         name=voice_name,
-        language_code=language_code
+        language_code=language
     )
     audio_config = texttospeech.AudioConfig(
         audio_encoding=texttospeech.AudioEncoding.MP3
