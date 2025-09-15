@@ -35,13 +35,6 @@ if not firebase_admin._apps:
 
 db = firestore.client()
 
-VOICE_MAPPING = {
-    "alex": "Chirp3-HD-Schedar",
-    "james": "Chirp3-HD-Sadachbia",
-    "taylor": "Chirp3-HD-Aoede",
-    "jordan": "Chirp3-HD-Vindemiatrix"
-}
-
 
 LANGUAGE_OPTIONS = {
     "English": "en-US",
@@ -173,18 +166,19 @@ Conversation:
             "session_note": "An error occurred while generating suggestions.",
             "suggestions": []
         }
+
+VOICE_MAPPING = {
+    "alex": "en-US-Chirp3-HD-Schedar",
+    "james": "en-US-Chirp3-HD-Sadachbia",
+    "taylor": "en-US-Chirp3-HD-Aoede",
+    "jordan": "en-US-Chirp3-HD-Vindemiatrix"
+}
+
 def speak_text(text, tone="alex", language="en-US"):
-    if language not in LANGUAGE_OPTIONS.values():
-        language = "en-US"
+    voice_name = VOICE_MAPPING.get(tone, "en-US-Wavenet-F")
 
-    # Get the mapped suffix (Chirp3 voice)
-    voice_suffix = VOICE_MAPPING.get(tone, "Chirp3-HD-Schedar")
-
-    # Build proper voice name: only use suffix if it exists in that locale
-    voice_name = f"{language}-{voice_suffix}"
-
-    # 👇 FIX: do not truncate language codes, pass exactly "fr-FR", "es-ES", etc.
-    language_code = language
+    # derive language_code directly from voice_name
+    language_code = "-".join(voice_name.split("-")[:2])
 
     synthesis_input = texttospeech.SynthesisInput(text=text)
     voice = texttospeech.VoiceSelectionParams(
