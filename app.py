@@ -35,6 +35,13 @@ if not firebase_admin._apps:
 
 db = firestore.client()
 
+VOICE_MAPPING = {
+    "alex": "Chirp3-HD-Schedar",
+    "james": "Chirp3-HD-Sadachbia",
+    "taylor": "Chirp3-HD-Aoede",
+    "jordan": "Chirp3-HD-Vindemiatrix"
+}
+
 
 LANGUAGE_OPTIONS = {
     "English": "en-US",
@@ -167,18 +174,15 @@ Conversation:
             "suggestions": []
         }
 
-VOICE_MAPPING = {
-    "alex": "en-US-Chirp3-HD-Schedar",
-    "james": "en-US-Chirp3-HD-Sadachbia",
-    "taylor": "en-US-Chirp3-HD-Aoede",
-    "jordan": "en-US-Chirp3-HD-Vindemiatrix"
-}
-
 def speak_text(text, tone="alex", language="en-US"):
-    voice_name = VOICE_MAPPING.get(tone, "en-US-Wavenet-F")
+    if language not in LANGUAGE_OPTIONS.values():
+        language = "en-US"
 
-    # derive language_code directly from voice_name
-    language_code = "-".join(voice_name.split("-")[:2])
+    voice_suffix = VOICE_MAPPING.get(tone, "Wavenet-F")
+
+    voice_name = f"{language}-{voice_suffix}"
+
+    language_code = "-".join(language.split("-")[:2])
 
     synthesis_input = texttospeech.SynthesisInput(text=text)
     voice = texttospeech.VoiceSelectionParams(
@@ -202,7 +206,6 @@ def speak_text(text, tone="alex", language="en-US"):
     except Exception as e:
         print("TTS Error:", e)
         return None
-
 
 @app.route("/languages", methods=["GET"])
 def languages():
