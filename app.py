@@ -174,36 +174,26 @@ Conversation:
             "suggestions": []
         }
 
-def speak_text(text, tone="alex", language="en-US"):
+def speak_text(text, language="en-US"):
+    client = texttospeech.TextToSpeechClient()
 
-    voice_suffix = VOICE_MAPPING.get(tone, "Wavenet-F")
-
-    voice_name = f"{language}-{voice_suffix}"
-
-    language_code = "-".join(language.split("-")[:2])
-
-    synthesis_input = texttospeech.SynthesisInput(text=text)
+    # 👇 Use language directly, don’t hardcode en-US
     voice = texttospeech.VoiceSelectionParams(
-        name=voice_name,
-        language_code=language
+        language_code=language,
+        name=f"{language}-Wavenet-A"   # or pick a voice available for that language
     )
+
     audio_config = texttospeech.AudioConfig(
         audio_encoding=texttospeech.AudioEncoding.MP3
     )
 
-    try:
-        response = tts_client.synthesize_speech(
-            input=synthesis_input, voice=voice, audio_config=audio_config
-        )
-        filename = f"static/output_{uuid.uuid4().hex}.mp3"
-        with open(filename, "wb") as out:
-            out.write(response.audio_content)
-            out.flush()
-            os.fsync(out.fileno())
-        return filename
-    except Exception as e:
-        print("TTS Error:", e)
-        return None
+    synthesis_input = texttospeech.SynthesisInput(text=text)
+    response = client.synthesize_speech(
+        input=synthesis_input,
+        voice=voice,
+        audio_config=audio_config
+    )
+    return response.audio_content
 
 @app.route("/languages", methods=["GET"])
 def languages():
