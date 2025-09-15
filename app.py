@@ -349,6 +349,7 @@ def speak():
     data = request.get_json()
     message = data.get("message", "")
     tone = data.get("tone", "alex")
+    print("LANG RECEIVED:", language)
 
     if not message or not tone:
         return jsonify({"error": "Missing message or tone"}), 400
