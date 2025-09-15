@@ -175,6 +175,8 @@ Conversation:
         }
 
 def speak_text(text, tone="alex", language="en-US"):
+    if language not in LANGUAGE_OPTIONS.values():
+        language = "en-US"
 
     voice_suffix = VOICE_MAPPING.get(tone, "Wavenet-F")
 
@@ -344,22 +346,24 @@ def summarize():
 
 @app.route("/speak", methods=["POST"])
 def speak():
-    data = request.get_json()
+    data = request.get_json() or {}
     message = data.get("message", "")
     tone = data.get("tone", "alex")
+    language = data.get("language", "en-US")
+
     print("LANG RECEIVED:", language)
 
     if not message or not tone:
         return jsonify({"error": "Missing message or tone"}), 400
 
     clean_message = remove_emojis(message)
-    language = data.get("language", "en-US")
     audio_path = speak_text(clean_message, tone=tone, language=language)
 
     if not audio_path:
         return jsonify({"error": "Failed to generate speech"}), 500
 
     return jsonify({"status": "success", "audio_url": f"/{audio_path}"}), 200
+
 
 
 @app.route("/save-questionnaire", methods=["POST"])
