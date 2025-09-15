@@ -175,8 +175,6 @@ Conversation:
         }
 
 def speak_text(text, tone="alex", language="en-US"):
-    if language not in LANGUAGE_OPTIONS.values():
-        language = "en-US"
 
     voice_suffix = VOICE_MAPPING.get(tone, "Wavenet-F")
 
