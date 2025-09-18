@@ -24,6 +24,7 @@ CORS(app, resources={r"/*": {
 
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
+tts_json = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
 firebase_json = os.getenv("GOOGLE_APPLICATION_CREDENTIALS_FIREBASE")
 
 if not firebase_admin._apps:
@@ -297,7 +298,7 @@ def chat():
             )
 
             if ai_reply.strip() in previous_responses:
-                ai_reply += " (Trying not to repeat myself!)"
+                ai_reply += ""
 
             previous_responses.append(ai_reply.strip())
             if len(previous_responses) > 10:
