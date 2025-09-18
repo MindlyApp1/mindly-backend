@@ -24,16 +24,15 @@ CORS(app, resources={r"/*": {
 
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
-tts_json = os.getenv("GOOGLE_APPLICATION_CREDENTIALS_TTS")
 firebase_json = os.getenv("GOOGLE_APPLICATION_CREDENTIALS_FIREBASE")
-
-os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = tts_json
 
 if not firebase_admin._apps:
     cred = credentials.Certificate(firebase_json)
     firebase_admin.initialize_app(cred)
 
 db = firestore.client()
+
+tts_client = texttospeech.TextToSpeechClient()
 
 VOICE_MAPPING = {
     "alex": "Chirp3-HD-Schedar",
@@ -405,7 +404,7 @@ def generate_title_and_suggestions():
     prev_title = (data.get("prev_title") or "").strip()
     prev_title_turn = data.get("prev_title_turn")
 
-    TITLE_GAP = 2
+    TITLE_GAP = 4
     user_turns = [
         m for m in messages if m.get("sender") == "user" and (m.get("text") or "").strip()
     ]
