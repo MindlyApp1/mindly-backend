@@ -333,7 +333,7 @@ def chat():
             ai_reply = "Error: Failed to connect to AI."
 
     audio_path = speak_text(ai_reply, tone=tone, language=language)
-    return jsonify({"response": ai_reply, "audio_url": f"/{audio_path}"})
+    return jsonify({"response": ai_reply, "audio_url": f"/static/{audio_path}"})
 
 @app.route("/summarize", methods=["POST"])
 def summarize():
