@@ -81,6 +81,46 @@ LANGUAGE_OPTIONS = {
     "Vietnamese (Vietnam)": "vi-VN",
 }
 
+LANGUAGE_NATIVE = {
+    "ar-XA": "العربية",
+    "bn-IN": "বাংলা",
+    "da-DK": "Dansk",
+    "nl-BE": "Nederlands",
+    "nl-NL": "Nederlands",
+    "en-AU": "English",
+    "en-IN": "English",
+    "en-GB": "English",
+    "en-US": "English",
+    "fi-FI": "Suomi",
+    "fr-CA": "Français",
+    "fr-FR": "Français",
+    "de-DE": "Deutsch",
+    "gu-IN": "ગુજરાતી",
+    "hi-IN": "हिन्दी",
+    "id-ID": "Bahasa Indonesia",
+    "it-IT": "Italiano",
+    "ja-JP": "日本語",
+    "kn-IN": "ಕನ್ನಡ",
+    "ko-KR": "한국어",
+    "ml-IN": "മലയാളം",
+    "cmn-CN": "中文",
+    "mr-IN": "मराठी",
+    "nb-NO": "Norsk",
+    "pl-PL": "Polski",
+    "pt-BR": "Português",
+    "es-ES": "Español",
+    "es-US": "Español",
+    "sv-SE": "Svenska",
+    "ta-IN": "தமிழ்",
+    "te-IN": "తెలుగు",
+    "th-TH": "ไทย",
+    "tr-TR": "Türkçe",
+    "uk-UA": "Українська",
+    "ur-IN": "اردو",
+    "vi-VN": "Tiếng Việt",
+}
+
+
 LANGUAGE_NAMES = {v: k for k, v in LANGUAGE_OPTIONS.items()}
 
 TONE_STYLES = {
@@ -287,7 +327,7 @@ def chat():
         )
 
         language = data.get("language", "en-US")
-        lang_name = LANGUAGE_NAMES.get(language, "English")
+        native_lang = LANGUAGE_NATIVE.get(language, "English")
         system_message = (
             f"{tone_style}\n"
             f"{prompt_modifiers}\n"
@@ -296,7 +336,7 @@ def chat():
             "Avoid calling them 'User', 'client', or 'individual'. "
             "Refer to them only by their name or by 'you'. "
             "Avoid repeating previous messages or questions.\n"
-            f"IMPORTANT: Respond ONLY in {lang_name}, both text and tone."
+            f"IMPORTANT: Respond ONLY in {native_lang}, both text and tone."
         )
 
         history_msgs = []
