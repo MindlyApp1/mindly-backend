@@ -81,46 +81,6 @@ LANGUAGE_OPTIONS = {
     "Vietnamese (Vietnam)": "vi-VN",
 }
 
-LANGUAGE_NATIVE = {
-    "ar-XA": "العربية",
-    "bn-IN": "বাংলা",
-    "da-DK": "Dansk",
-    "nl-BE": "Nederlands",
-    "nl-NL": "Nederlands",
-    "en-AU": "English",
-    "en-IN": "English",
-    "en-GB": "English",
-    "en-US": "English",
-    "fi-FI": "Suomi",
-    "fr-CA": "Français",
-    "fr-FR": "Français",
-    "de-DE": "Deutsch",
-    "gu-IN": "ગુજરાતી",
-    "hi-IN": "हिन्दी",
-    "id-ID": "Bahasa Indonesia",
-    "it-IT": "Italiano",
-    "ja-JP": "日本語",
-    "kn-IN": "ಕನ್ನಡ",
-    "ko-KR": "한국어",
-    "ml-IN": "മലയാളം",
-    "cmn-CN": "中文",
-    "mr-IN": "मराठी",
-    "nb-NO": "Norsk",
-    "pl-PL": "Polski",
-    "pt-BR": "Português",
-    "es-ES": "Español",
-    "es-US": "Español",
-    "sv-SE": "Svenska",
-    "ta-IN": "தமிழ்",
-    "te-IN": "తెలుగు",
-    "th-TH": "ไทย",
-    "tr-TR": "Türkçe",
-    "uk-UA": "Українська",
-    "ur-IN": "اردو",
-    "vi-VN": "Tiếng Việt",
-}
-
-
 LANGUAGE_NAMES = {v: k for k, v in LANGUAGE_OPTIONS.items()}
 
 TONE_STYLES = {
@@ -184,13 +144,15 @@ def is_off_topic(prompt):
             return True
     return False
 
-def remove_emojis(text):
+def remove_emojis(text: str) -> str:
     emoji_pattern = re.compile("["
-        u"\U0001F600-\U0001F64F" u"\U0001F300-\U0001F5FF"
-        u"\U0001F680-\U0001F6FF" u"\U0001F1E0-\U0001F1FF"
-        u"\U00002700-\U000027BF" u"\U000024C2-\U0001F251"
+        u"\U0001F600-\U0001F64F"  # emoticons
+        u"\U0001F300-\U0001F5FF"  # symbols & pictographs
+        u"\U0001F680-\U0001F6FF"  # transport & map symbols
+        u"\U0001F1E0-\U0001F1FF"  # flags
         "]+", flags=re.UNICODE)
     return emoji_pattern.sub(r'', text)
+
 
 def clean_ai_response(text):
     cleaned = re.sub(r"\*+(.*?)\*+", r"\1", text)
@@ -327,7 +289,7 @@ def chat():
         )
 
         language = data.get("language", "en-US")
-        native_lang = LANGUAGE_NATIVE.get(language, "English")
+        lang_name = LANGUAGE_NAMES.get(language, "English")
         system_message = (
             f"{tone_style}\n"
             f"{prompt_modifiers}\n"
@@ -336,7 +298,7 @@ def chat():
             "Avoid calling them 'User', 'client', or 'individual'. "
             "Refer to them only by their name or by 'you'. "
             "Avoid repeating previous messages or questions.\n"
-            f"IMPORTANT: Respond ONLY in {native_lang}, both text and tone."
+            f"IMPORTANT: Respond ONLY in {lang_name}, both text and tone."
         )
 
         history_msgs = []
@@ -373,7 +335,9 @@ def chat():
             ai_reply = "Error: Failed to connect to AI."
 
     audio_path = speak_text(ai_reply, tone=tone, language=language)
-    return jsonify({"response": ai_reply, "audio_url": f"/{audio_path}"})
+    return jsonify({"response": ai_reply, "audio_url": f"/{audio_path}"}), 200, {
+    "Content-Type": "application/json; charset=utf-8" }
+
 
 @app.route("/summarize", methods=["POST"])
 def summarize():
