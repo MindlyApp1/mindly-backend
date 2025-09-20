@@ -331,8 +331,11 @@ def chat():
                 previous_responses.pop(0)
 
         except Exception as e:
-            print("ERROR:", str(e))
-            ai_reply = "Error: Failed to connect to AI."
+            import traceback
+            print("ERROR calling OpenAI:", str(e))
+            traceback.print_exc()
+            ai_reply = f"Error: Failed to connect to AI. ({str(e)})"
+
 
     audio_path = speak_text(ai_reply, tone=tone, language=language)
 
