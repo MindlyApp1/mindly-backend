@@ -146,13 +146,12 @@ def is_off_topic(prompt):
 
 def remove_emojis(text: str) -> str:
     emoji_pattern = re.compile("["
-        u"\U0001F600-\U0001F64F"  # emoticons
-        u"\U0001F300-\U0001F5FF"  # symbols & pictographs
-        u"\U0001F680-\U0001F6FF"  # transport & map symbols
-        u"\U0001F1E0-\U0001F1FF"  # flags
+        u"\U0001F600-\U0001F64F"
+        u"\U0001F300-\U0001F5FF"
+        u"\U0001F680-\U0001F6FF"
+        u"\U0001F1E0-\U0001F1FF"
         "]+", flags=re.UNICODE)
     return emoji_pattern.sub(r'', text)
-
 
 def clean_ai_response(text):
     cleaned = re.sub(r"\*+(.*?)\*+", r"\1", text)
@@ -320,7 +319,6 @@ def chat():
 
             raw_reply = response["choices"][0]["message"]["content"]
 
-            # ✅ No cleaning — keep raw text intact
             ai_reply = raw_reply.strip()
 
             if ai_reply.strip() in previous_responses:
@@ -331,11 +329,8 @@ def chat():
                 previous_responses.pop(0)
 
         except Exception as e:
-            import traceback
-            print("ERROR calling OpenAI:", str(e))
-            traceback.print_exc()
-            ai_reply = f"Error: Failed to connect to AI. ({str(e)})"
-
+            print("ERROR:", str(e))
+            ai_reply = "Error: Failed to connect to AI."
 
     audio_path = speak_text(ai_reply, tone=tone, language=language)
 
