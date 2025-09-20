@@ -246,7 +246,6 @@ def health():
     return {"status": "ok"}, 200
 
 previous_responses = []
-
 @app.route("/chat", methods=["POST"])
 def chat():
     global previous_responses
@@ -265,7 +264,6 @@ def chat():
         "empathy": 0.5,
         "validation": 0.5
     }
-
     merged_sliders = {**DEFAULT_SLIDERS, **tone_settings}
 
     if is_off_topic(user_input):
@@ -280,7 +278,6 @@ def chat():
         session_header = (
             f"You are speaking to {display_name}. "
             "Keep context. Call them by name/'you'. Don’t restart or repeat."
-
         )
 
         summary_line = (
@@ -290,6 +287,7 @@ def chat():
 
         language = data.get("language", "en-US")
         lang_name = LANGUAGE_NAMES.get(language, "English")
+
         system_message = (
             f"{tone_style}\n"
             f"{prompt_modifiers}\n"
@@ -298,7 +296,7 @@ def chat():
             "Avoid calling them 'User', 'client', or 'individual'. "
             "Refer to them only by their name or by 'you'. "
             "Avoid repeating previous messages or questions.\n"
-            f"IMPORTANT: Respond ONLY in {lang_name}, both text and tone."
+            f"IMPORTANT: Respond ONLY in {lang_name} [{language}]. Do not use English."
         )
 
         history_msgs = []
@@ -319,9 +317,11 @@ def chat():
                 max_tokens=220,
                 temperature=0.8,
             )
-            ai_reply = clean_ai_response(
-                ai_reply = response["choices"][0]["message"]["content"].strip()
-            )
+
+            raw_reply = response["choices"][0]["message"]["content"]
+
+            # ✅ No cleaning — keep raw text intact
+            ai_reply = raw_reply.strip()
 
             if ai_reply.strip() in previous_responses:
                 ai_reply += ""
@@ -335,8 +335,12 @@ def chat():
             ai_reply = "Error: Failed to connect to AI."
 
     audio_path = speak_text(ai_reply, tone=tone, language=language)
-    return jsonify({"response": ai_reply, "audio_url": f"/{audio_path}"}), 200, {
-    "Content-Type": "application/json; charset=utf-8" }
+
+    return (
+        jsonify({"response": ai_reply, "audio_url": f"/{audio_path}"}),
+        200,
+        {"Content-Type": "application/json; charset=utf-8"}
+    )
 
 @app.route("/summarize", methods=["POST"])
 def summarize():
@@ -370,7 +374,6 @@ def summarize():
 
         return jsonify({"summary": prev_summary})
 
-
 @app.route("/speak", methods=["POST"])
 def speak():
     data = request.get_json() or {}
@@ -384,14 +387,17 @@ def speak():
         return jsonify({"error": "Missing message or tone"}), 400
 
     clean_message = remove_emojis(message)
+
     audio_path = speak_text(clean_message, tone=tone, language=language)
 
     if not audio_path:
         return jsonify({"error": "Failed to generate speech"}), 500
 
-    return jsonify({"status": "success", "audio_url": f"/{audio_path}"}), 200
-
-
+    return (
+        jsonify({"status": "success", "audio_url": f"/{audio_path}"}),
+        200,
+        {"Content-Type": "application/json; charset=utf-8"}
+    )
 
 @app.route("/save-questionnaire", methods=["POST"])
 def save_questionnaire():
