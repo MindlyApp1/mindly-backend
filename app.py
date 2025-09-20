@@ -320,7 +320,7 @@ def chat():
                 temperature=0.8,
             )
             ai_reply = clean_ai_response(
-                remove_emojis(response["choices"][0]["message"]["content"])
+                ai_reply = response["choices"][0]["message"]["content"].strip()
             )
 
             if ai_reply.strip() in previous_responses:
@@ -337,7 +337,6 @@ def chat():
     audio_path = speak_text(ai_reply, tone=tone, language=language)
     return jsonify({"response": ai_reply, "audio_url": f"/{audio_path}"}), 200, {
     "Content-Type": "application/json; charset=utf-8" }
-
 
 @app.route("/summarize", methods=["POST"])
 def summarize():
