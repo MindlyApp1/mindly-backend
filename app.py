@@ -245,6 +245,7 @@ def health():
     return {"status": "ok"}, 200
 
 previous_responses = []
+
 @app.route("/chat", methods=["POST"])
 def chat():
     global previous_responses
@@ -334,11 +335,18 @@ def chat():
 
     audio_path = speak_text(ai_reply, tone=tone, language=language)
 
-    return (
-        jsonify({"response": ai_reply, "audio_url": f"/{audio_path}"}),
-        200,
-        {"Content-Type": "application/json; charset=utf-8"}
-    )
+    if audio_path:
+        return (
+            jsonify({"response": ai_reply, "audio_url": f"/{audio_path}"}),
+            200,
+            {"Content-Type": "application/json; charset=utf-8"}
+        )
+    else:
+        return (
+            jsonify({"response": ai_reply, "audio_url": None}),
+            200,
+            {"Content-Type": "application/json; charset=utf-8"}
+        )
 
 @app.route("/summarize", methods=["POST"])
 def summarize():
