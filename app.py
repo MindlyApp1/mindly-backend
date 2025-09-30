@@ -320,7 +320,6 @@ def chat():
             )
 
             raw_reply = response["choices"][0]["message"]["content"]
-
             ai_reply = raw_reply.strip()
 
             if ai_reply.strip() in previous_responses:
