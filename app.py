@@ -266,6 +266,8 @@ def chat():
     }
     merged_sliders = {**DEFAULT_SLIDERS, **tone_settings}
 
+    language = data.get("language", "en-US")
+
     if is_off_topic(user_input):
         ai_reply = (
             "Sorry, I can't help with that. "
@@ -285,7 +287,6 @@ def chat():
             if summary else ""
         )
 
-        language = data.get("language", "en-US")
         lang_name = LANGUAGE_NAMES.get(language, "English")
 
         system_message = (
@@ -333,20 +334,16 @@ def chat():
             print("ERROR:", str(e))
             ai_reply = "Error: Failed to connect to AI."
 
-    audio_path = speak_text(ai_reply, tone=tone, language=language)
+    try:
+        audio_path = speak_text(ai_reply, tone=tone, language=language)
+    except Exception as e:
+        print("TTS ERROR:", e)
+        audio_path = None
 
     if audio_path:
-        return (
-            jsonify({"response": ai_reply, "audio_url": f"/{audio_path}"}),
-            200,
-            {"Content-Type": "application/json; charset=utf-8"}
-        )
+        return jsonify({"response": ai_reply, "audio_url": f"/{audio_path}"}), 200
     else:
-        return (
-            jsonify({"response": ai_reply, "audio_url": None}),
-            200,
-            {"Content-Type": "application/json; charset=utf-8"}
-        )
+        return jsonify({"response": ai_reply, "audio_url": None}), 200
 
 @app.route("/summarize", methods=["POST"])
 def summarize():
