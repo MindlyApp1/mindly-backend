@@ -1,4 +1,5 @@
 from flask import Flask, request, jsonify, send_from_directory, make_response
+from datetime import datetime, timedelta, timezone
 import openai
 import difflib
 import re
@@ -115,17 +116,6 @@ TONE_STYLES = {
     )
 }
 
-NOTALLOWEDWORDS = [
-    "bake", "baking", "recipe", "cook", "coding", "program", "debug", "java", "python", "html", "css",
-    "sql", "react", "calculate", "math", "formula", "expression", "game", "draw", "story", "poem",
-    "translate", "encrypt", "decrypt", "plot", "graph"
-]
-
-PATTERNS = [
-    r"\d+\s*[+\-*/x]\s*\d+",
-    r"how (do|to) .*?\d+",
-]
-
 default_note = "This session is just starting, take your time to reflect and be kind to yourself."
 default_suggestions = [
     "Take 3 slow, mindful breaths focusing on your breathing.",
@@ -135,13 +125,63 @@ default_suggestions = [
 ]
 
 def is_off_topic(prompt):
-    prompt_lower = prompt.lower()
-    for keyword in NOTALLOWEDWORDS:
-        if keyword in prompt_lower or difflib.SequenceMatcher(None, keyword, prompt_lower).ratio() > 0.8:
+    text = normalize_for_detection(prompt)
+
+    technical_keywords = [
+        "recipe", "bake", "cook", "program", "debug", "java", "python", "html", "css",
+        "sql", "react", "calculate", "math", "formula", "expression",
+        "game", "draw", "poem", "translate", "encrypt", "decrypt", "graph", "plot"
+    ]
+    for word in technical_keywords:
+        if word in text:
             return True
-    for pattern in PATTERNS:
-        if re.search(pattern, prompt_lower):
-            return True
+
+    academic_pattern = re.search(
+        r"\b("
+            r"tell me about|what('|’)s|what is|who is|how does|why does|"
+            r"explain|describe|define|discuss|analyze|summarize|outline|compare|identify|"
+            r"teach|calculate|name|state|list|give me|show me|write|draw|create|"
+            r"demonstrate|illustrate|label|solve|classify|construct|design|"
+            r"detail|clarify|inform me about|talk about"
+        r")\b.*\b("
+            r"cell|atom|molecule|element|compound|equation|formula|reaction|"
+            r"planet|universe|star|galaxy|black hole|"
+            r"history|war|empire|revolution|"
+            r"physics|chemistry|biology|biochemistry|organic chemistry|mitochondria|resonance|photosynthesis|law|velocity|"
+            r"gene|genetics|protein|enzyme|organism|bacteria|virus|disease|pathogen|"
+            r"kingdom|species|climate|ecosystem|earth|water|energy|force|gravity|temperature|pressure|mass|weight|density"
+        r")\b",
+        text
+    )
+
+    if academic_pattern:
+        return True
+
+    if re.search(r"(tell|explain|describe|share).*?(about|me|a time|when|how you feel|experience|moment)", text):
+        return False
+
+    if re.search(r"\b(tell|explain|describe|define|analyze|discuss|share)\b", text):
+        try:
+            completion = openai.ChatCompletion.create(
+                model="gpt-3.5-turbo",
+                messages=[
+                    {"role": "system", "content": (
+                        "You are a classifier. Decide if the user's question is "
+                        "'academic' (fact/knowledge based, technical, or about real-world concepts) "
+                        "or 'reflective' (about emotions, personal experiences, wellbeing, or introspection). "
+                        "Reply ONLY with one word: academic or reflective."
+                    )},
+                    {"role": "user", "content": text},
+                ],
+                max_tokens=1,
+                temperature=0,
+            )
+            label = completion["choices"][0]["message"]["content"].strip().lower()
+            return label == "academic"
+        except Exception as e:
+            print("[is_off_topic] GPT classification failed:", e)
+            return False
+
     return False
 
 def remove_emojis(text: str) -> str:
@@ -161,7 +201,6 @@ def clean_ai_response(text):
     return cleaned.strip()
 
 tts_client = texttospeech.TextToSpeechClient()
-
 
 def run_suggestions(messages):
     conversation = "\n".join(
@@ -244,11 +283,142 @@ def index():
 def health():
     return {"status": "ok"}, 200
 
-previous_responses = []
+def set_crisis_lockout(user_id):
+    lockout_until_utc = datetime.now(timezone.utc) + timedelta(hours=24)
+
+    db.collection("users").document(user_id).set({
+        "isLockedOut": True,
+        "lockoutReason": "crisis",
+        "crisisLockoutUntil": lockout_until_utc
+    }, merge=True)
+
+    return lockout_until_utc
+
+def check_lockout_status(user_id):
+    doc_ref = db.collection("users").document(user_id)
+    doc = doc_ref.get()
+    if not doc.exists:
+        return False, None
+
+    data = doc.to_dict()
+    locked = data.get("locked", False)
+    until = data.get("lockout_until")
+
+    if until:
+        if hasattr(until, "to_datetime"):
+            until = until.to_datetime()
+        if until.tzinfo is None:
+            until = until.replace(tzinfo=timezone.utc)
+
+        now = datetime.now(timezone.utc)
+        if until > now:
+            return True, until
+
+    return False, None
+
+import re
+import unicodedata
+import difflib
+import openai
+
+def normalize_for_detection(text: str) -> str:
+    t = text.lower()
+    t = ''.join(c for c in unicodedata.normalize('NFKD', t) if not unicodedata.combining(c))
+    t = (t.replace('1','i')
+           .replace('!','i')
+           .replace('|','i')
+           .replace('@','a')
+           .replace('$','s')
+           .replace('5','s')
+           .replace('3','e')
+           .replace('0','o')
+           .replace('7','t'))
+    emoji_pattern = re.compile("["
+        u"\U0001F600-\U0001F64F"
+        u"\U0001F300-\U0001F5FF"
+        u"\U0001F680-\U0001F6FF"
+        u"\U0001F1E0-\U0001F1FF"
+        "]+", flags=re.UNICODE)
+    t = emoji_pattern.sub("", t)
+    t = re.sub(r'[^a-z\s]', '', t)
+    t = re.sub(r'\s+', ' ', t)
+    return t.strip()
+
+def is_crisis(text: str) -> bool:
+    text_clean = normalize_for_detection(text)
+
+    crisis_keywords = [
+        "suicide", "kill myself","end my life","want to die","die tonight",
+        "self harm","selfharm","hurt myself","cut myself","overdose","cant go on",
+        "wish i was dead","want to disappear","ending it all","no reason to live",
+        "life not worth living","take my life","not wake up","give up completely",
+        "im done","cant do this anymore","ending everything","sleep forever",
+        "final plan","final solution","exit plan","exit strategy","final act","last message",
+        "goodbye forever","no way out","nothing left","tired of being alive","hopeless",
+        "worthless","pointless","meaningless","done fighting","stop the pain",
+        "ready to go","ready to leave","ready to end","signing off","say goodbye",
+        "stop existing","end myself","ending myself","leaving forever","kill me","hate myself"
+    ]
+
+    for kw in crisis_keywords:
+        if kw in text_clean:
+            return True
+
+    crisis_pattern = re.search(
+        r"(s+u+i+c+i+d+e|"
+        r"sui.?cide|suis.?ide|suic.?id|"
+        r"kill(ing)?\s+myself|"
+        r"end(ing)?\s+(it|everything|my\s+life|all)|"
+        r"(cant|cannot|dont|dont)\s+(go|do|continue|carry)\s+on|"
+        r"over\s?dose|self[-\s]?harm|hurt(ing)?\s+myself|cut(ting)?\s+myself|"
+        r"no\s+reason\s+to\s+live|"
+        r"(worthless|hopeless|pointless|meaningless)|"
+        r"(hate|disgust|loathe)\s+myself|"
+        r"wish\s+i\s+was\s+dead|"
+        r"want\s+to\s+(die|disappear|sleep\s+forever|leave\s+forever|stop\s+existing)|"
+        r"life\s+(is|feels)\s+(pointless|hopeless|meaningless)|"
+        r"(final\s+decision|final\s+plan|final\s+solution|final\s+act|exit\s+plan|exit\s+strategy)|"
+        r"(not\s+wake\s+up|give\s+up\s+completely|im\s+done|can.?t\s+anymore|ending\s+everything|stop\s+the\s+pain)|"
+        r"ready\s+to\s+(go|leave|end)|"
+        r"(last\s+message|goodbye\s+forever|signing\s+off|say\s+goodbye)|"
+        r"(nothing\s+left|no\s+way\s+out|tired\s+of\s+being\s+alive|done\s+fighting|done\s+struggling))",
+        text_clean
+    )
+    if crisis_pattern:
+        return True
+
+    for word in text_clean.split():
+        if difflib.SequenceMatcher(None, word, "suicide").ratio() > 0.7:
+            return True
+
+    if re.search(r"\b(help|end|sleep|done|tired|nothing|goodbye|forever|exit|plan|final|solution|pain|kill|die)\b", text_clean):
+        try:
+            completion = openai.ChatCompletion.create(
+                model="gpt-3.5-turbo",
+                messages=[
+                    {"role": "system", "content": (
+                        "You are a mental health safety classifier. "
+                        "Determine ONLY if this message implies self-harm, suicidal intent, "
+                        "or extreme hopelessness — even indirectly or metaphorically. "
+                        "Respond with one word only: 'crisis' or 'safe'."
+                    )},
+                    {"role": "user", "content": text_clean},
+                ],
+                max_tokens=1,
+                temperature=0,
+            )
+            label = completion["choices"][0]["message"]["content"].strip().lower()
+            return label == "crisis"
+        except Exception as e:
+            print("[is_crisis] GPT classification failed:", e)
+            return False
+
+    return False
+
+previous_responses = [] 
 
 @app.route("/chat", methods=["POST"])
 def chat():
-    global previous_responses
     data = request.get_json()
 
     user_input    = data.get("message", "")
@@ -257,6 +427,7 @@ def chat():
     display_name  = (data.get("displayName", "you") or "you").strip()
     history       = data.get("history", []) or []
     summary       = (data.get("summary") or "").strip()
+    user_id       = data.get("userId")
 
     DEFAULT_SLIDERS = {
         "directiveness": 0.5,
@@ -265,8 +436,28 @@ def chat():
         "validation": 0.5
     }
     merged_sliders = {**DEFAULT_SLIDERS, **tone_settings}
-
     language = data.get("language", "en-US")
+
+    if user_id:
+        locked, until = check_lockout_status(user_id)
+        if locked:
+            return jsonify({
+                "crisis": True,
+                "lockout_until": until.isoformat() if until else None
+            }), 200
+
+
+    if is_crisis(user_input):
+        if user_id:
+            set_crisis_lockout(user_id)
+        else:
+            _ = datetime.now(timezone.utc) + timedelta(hours=24)
+
+        return jsonify({
+            "crisis": True,
+            "lockout": True,
+            "lockout_until": (datetime.now(timezone.utc) + timedelta(hours=24)).isoformat()
+        }), 200
 
     if is_off_topic(user_input):
         ai_reply = (
@@ -557,25 +748,51 @@ def generate_title_and_suggestions():
         "suggestions": suggestions,
     })
 
-
 def build_prompt(user_msg, modifiers):
     d = modifiers.get("directiveness", 0.5)
     r = modifiers.get("reflection", 0.5)
     e = modifiers.get("empathy", 0.5)
     v = modifiers.get("validation", 0.5)
 
+    def tone_level(value, low, mid, high):
+        if value <= 0.25:
+            return low
+        elif value <= 0.75:
+            return mid
+        else:
+            return high
+
     prompt = f"Respond to: '{user_msg}'\n\n"
 
-    prompt += "Directive.\n" if d >= 0.7 else "Low direction.\n"
+    prompt += tone_level(
+        d,
+        "Give gentle nudges, avoid instructions or advice.\n",
+        "Offer light guidance when relevant, but avoid taking control.\n",
+        "Be clear and purposeful — offer direction and next steps confidently.\n"
+    )
 
-    prompt += "Reflective.\n" if r >= 0.7 else "Little reflection.\n"
+    prompt += tone_level(
+        r,
+        "Keep responses simple, avoid echoing the user’s words.\n",
+        "Reflect key feelings or ideas occasionally.\n",
+        "Actively paraphrase the user’s emotions or meaning to show deep understanding.\n"
+    )
 
-    prompt += "Empathetic.\n" if e >= 0.7 else "Neutral tone.\n"
+    prompt += tone_level(
+        e,
+        "Show calm acknowledgement without deep emotional phrasing.\n",
+        "Express understanding through tone and short affirmations.\n",
+        "Show strong emotional attunement — validate distress and warmth clearly.\n"
+    )
 
-    prompt += "Validate feelings.\n" if v >= 0.7 else "No validation.\n"
+    prompt += tone_level(
+        v,
+        "Avoid emotional judgments, keep a neutral stance.\n",
+        "Recognize valid feelings lightly (e.g., 'that makes sense').\n",
+        "Affirm feelings directly (e.g., 'anyone would feel that way').\n"
+    )
 
     return prompt
-
 
 @app.route("/add-email", methods=["POST"])
 def add_email():
