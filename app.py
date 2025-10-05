@@ -416,13 +416,12 @@ def is_crisis(text: str) -> bool:
             return False
 
     return False
-import re
 
 def get_user_info_from_firestore(user_id):
     """
     Returns (user_email, display_name).
     Works for both UID and email-based document IDs.
-    Removes numbers from name if generated from email.
+    Cleans numbers, underscores, dots, and hyphens from generated names.
     """
     try:
         doc_ref = db.collection("users").document(user_id)
@@ -436,7 +435,8 @@ def get_user_info_from_firestore(user_id):
             if not display_name and "@" in user_email:
                 name_part = user_email.split("@")[0]
                 name_part = re.sub(r"\d+", "", name_part)
-                display_name = name_part.capitalize()
+                name_part = re.sub(r"[_\.-]+", " ", name_part)
+                display_name = " ".join(word.capitalize() for word in name_part.split())
 
             print(f"[get_user_info_from_firestore] Found email: {user_email}, displayName: {display_name}")
             return user_email, display_name
@@ -445,7 +445,8 @@ def get_user_info_from_firestore(user_id):
             print(f"[get_user_info_from_firestore] No Firestore doc, using email prefix fallback.")
             name_part = user_id.split("@")[0]
             name_part = re.sub(r"\d+", "", name_part)
-            display_name = name_part.capitalize()
+            name_part = re.sub(r"[_\.-]+", " ", name_part)
+            display_name = " ".join(word.capitalize() for word in name_part.split())
             return user_id.strip(), display_name
 
         else:
