@@ -484,8 +484,8 @@ def get_user_email_from_firestore(user_id):
         print("[get_user_email_from_firestore] error:", e)
 
     return None
-def send_user_support_email(user_email: str, message_text: str):
-    """Send a supportive email to the user if a crisis keyword is detected."""
+
+def send_user_support_email(user_email: str, message_text: str, display_name: str = "there"):
     try:
         sender_email = os.getenv("ALERT_EMAIL_SENDER")
         sender_password = os.getenv("ALERT_EMAIL_PASSWORD")
@@ -496,8 +496,10 @@ def send_user_support_email(user_email: str, message_text: str):
 
         subject = "URGENT: You are not alone. Help is available"
 
+        greeting = f"Hi {display_name}," if display_name and display_name.lower() != "there" else "Hi there,"
+
         body = f"""
-Hi there,
+{greeting}
 
 We wanted to reach out because it seems like you might be going through a difficult time. Please know that you are not alone and that your feelings are valid and important. Your life has meaning, and there are people who care deeply about you and want to help you through this moment.
 
@@ -513,7 +515,6 @@ The Mindly Team
         msg["Subject"] = subject
         msg["From"] = sender_email
         msg["To"] = user_email
-
         msg["X-Priority"] = "1"
         msg["X-MSMail-Priority"] = "High"
         msg["Importance"] = "High"
@@ -526,7 +527,6 @@ The Mindly Team
 
     except Exception as e:
         print("[USER SUPPORT EMAIL ERROR]:", e)
-
 
 previous_responses = [] 
 
