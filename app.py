@@ -10,6 +10,8 @@ import firebase_admin
 from firebase_admin import credentials, firestore
 import uuid
 from dotenv import load_dotenv
+import smtplib
+from email.mime.text import MIMEText
 
 load_dotenv()
 
@@ -415,6 +417,117 @@ def is_crisis(text: str) -> bool:
 
     return False
 
+def send_crisis_alert_email(user_id: str, message: str):
+    """Send an alert email to the Mindly team when a crisis message is detected."""
+    try:
+        sender_email = os.getenv("ALERT_EMAIL_SENDER")
+        sender_password = os.getenv("ALERT_EMAIL_PASSWORD")
+        recipient_email = sender_email
+
+        if not all([sender_email, sender_password]):
+            print("[CRISIS ALERT] Missing email credentials in environment.")
+            return
+
+        subject = "⚠️ Mindly Crisis Keyword Detected"
+        body = f"""
+        Mindly detected a possible crisis message.
+
+        User ID: {user_id or 'Unknown'}
+        Message:
+        "{message}"
+
+        Timestamp: {datetime.now(timezone.utc).isoformat()}
+
+        Please review this user's session in Firestore to ensure appropriate follow-up.
+        """
+
+        msg = MIMEText(body)
+        msg["Subject"] = subject
+        msg["From"] = sender_email
+        msg["To"] = recipient_email
+
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+            server.login(sender_email, sender_password)
+            server.send_message(msg)
+
+        print("[CRISIS ALERT] Email sent successfully.")
+
+    except Exception as e:
+        print("[CRISIS ALERT ERROR]:", e)
+
+def get_user_email_from_firestore(user_id):
+    """
+    Returns the user's email.
+    Works for both:
+      1) Users whose Firestore document ID *is* their email (e.g., "5@gmail.com")
+      2) Users whose ID is a UID and have an 'email' field in their doc
+    """
+    try:
+        if "@" in user_id and "." in user_id:
+            print(f"[get_user_email_from_firestore] Using document ID as email: {user_id}")
+            return user_id
+
+        doc_ref = db.collection("users").document(user_id)
+        doc = doc_ref.get()
+        if doc.exists:
+            data = doc.to_dict() or {}
+            user_email = data.get("email")
+            if user_email:
+                print(f"[get_user_email_from_firestore] Found email in Firestore: {user_email}")
+                return user_email
+            else:
+                print(f"[get_user_email_from_firestore] No 'email' field for user_id: {user_id}")
+        else:
+            print(f"[get_user_email_from_firestore] No Firestore document for user_id: {user_id}")
+
+    except Exception as e:
+        print("[get_user_email_from_firestore] error:", e)
+
+    return None
+def send_user_support_email(user_email: str, message_text: str):
+    """Send a supportive email to the user if a crisis keyword is detected."""
+    try:
+        sender_email = os.getenv("ALERT_EMAIL_SENDER")
+        sender_password = os.getenv("ALERT_EMAIL_PASSWORD")
+
+        if not user_email:
+            print("[USER SUPPORT EMAIL] No user email found.")
+            return
+
+        subject = "URGENT: You are not alone. Help is available"
+
+        body = f"""
+Hi there,
+
+We wanted to reach out because it seems like you might be going through a difficult time. Please know that you are not alone and that your feelings are valid and important. Your life has meaning, and there are people who care deeply about you and want to help you through this moment.
+
+If you are in Canada or the United States, you can call or text 988 (Suicide and Crisis Helpline) any time, day or night. If you are outside North America, please visit findahelpline.com to locate free, confidential crisis support in your country. If you ever feel in immediate danger, please go to your nearest emergency department or contact your local emergency number.
+
+You are valued and deserving of care, kindness, and understanding. Reaching out for help takes courage, and it is a sign of strength to ask for support when you need it. Please take care of yourself and remember that support is always available.
+
+With care,
+The Mindly Team
+"""
+
+        msg = MIMEText(body)
+        msg["Subject"] = subject
+        msg["From"] = sender_email
+        msg["To"] = user_email
+
+        msg["X-Priority"] = "1"
+        msg["X-MSMail-Priority"] = "High"
+        msg["Importance"] = "High"
+
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+            server.login(sender_email, sender_password)
+            server.send_message(msg)
+
+        print(f"[USER SUPPORT EMAIL] Sent successfully to {user_email}")
+
+    except Exception as e:
+        print("[USER SUPPORT EMAIL ERROR]:", e)
+
+
 previous_responses = [] 
 
 @app.route("/chat", methods=["POST"])
@@ -446,10 +559,17 @@ def chat():
                 "lockout_until": until.isoformat() if until else None
             }), 200
 
-
     if is_crisis(user_input):
         if user_id:
             set_crisis_lockout(user_id)
+
+            send_crisis_alert_email(user_id, user_input)
+
+            user_email = get_user_email_from_firestore(user_id)
+            if user_email:
+                send_user_support_email(user_email, user_input)
+            else:
+                print("[CRISIS ALERT] No user email found for this user_id.")
         else:
             _ = datetime.now(timezone.utc) + timedelta(hours=24)
 
@@ -458,6 +578,7 @@ def chat():
             "lockout": True,
             "lockout_until": (datetime.now(timezone.utc) + timedelta(hours=24)).isoformat()
         }), 200
+
 
     if is_off_topic(user_input):
         ai_reply = (
