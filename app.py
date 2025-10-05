@@ -419,39 +419,36 @@ def is_crisis(text: str) -> bool:
 
 def get_user_info_from_firestore(user_id):
     """
-    Returns a tuple (user_email, display_name).
-    Works for both:
-      1) Users whose Firestore document ID is their email (e.g., "user@gmail.com")
-      2) Users whose ID is a UID with 'email' and optional 'displayName' or 'name' fields in the doc
+    Returns (user_email, display_name).
+    Works for both UID and email-based document IDs.
     """
     try:
-
-        if "@" in user_id and "." in user_id:
-            print(f"[get_user_info_from_firestore] Using document ID as email: {user_id}")
-            return user_id.strip(), "friend"
-
         doc_ref = db.collection("users").document(user_id)
         doc = doc_ref.get()
 
         if doc.exists:
             data = doc.to_dict() or {}
-            user_email = (data.get("email") or "").strip()
-            display_name = (data.get("displayName") or data.get("name") or "friend").strip()
+            user_email = (data.get("email") or user_id).strip()
+            display_name = (data.get("displayName") or data.get("name") or "").strip()
 
-            if user_email:
-                print(f"[get_user_info_from_firestore] Found email: {user_email}, displayName: {display_name}")
-                return user_email, display_name
-            else:
-                print(f"[get_user_info_from_firestore] Missing email for user_id: {user_id}")
-                return None, display_name
+            if not display_name and "@" in user_email:
+                display_name = user_email.split("@")[0].capitalize()
+
+            print(f"[get_user_info_from_firestore] Found email: {user_email}, displayName: {display_name}")
+            return user_email, display_name
+
+        elif "@" in user_id:
+            print(f"[get_user_info_from_firestore] No Firestore doc, using email prefix fallback.")
+            return user_id.strip(), user_id.split("@")[0].capitalize()
 
         else:
-            print(f"[get_user_info_from_firestore] No Firestore document found for user_id: {user_id}")
+            print(f"[get_user_info_from_firestore] No Firestore doc and not an email ID.")
+            return None, "friend"
 
     except Exception as e:
         print("[get_user_info_from_firestore] error:", e)
+        return None, "friend"
 
-    return None, "friend"
 
 def send_user_support_email(user_email: str, message_text: str, display_name: str = "friend"):
     try:
