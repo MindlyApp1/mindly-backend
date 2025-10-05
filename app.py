@@ -416,11 +416,13 @@ def is_crisis(text: str) -> bool:
             return False
 
     return False
+import re
 
 def get_user_info_from_firestore(user_id):
     """
     Returns (user_email, display_name).
     Works for both UID and email-based document IDs.
+    Removes numbers from name if generated from email.
     """
     try:
         doc_ref = db.collection("users").document(user_id)
@@ -432,14 +434,19 @@ def get_user_info_from_firestore(user_id):
             display_name = (data.get("displayName") or data.get("name") or "").strip()
 
             if not display_name and "@" in user_email:
-                display_name = user_email.split("@")[0].capitalize()
+                name_part = user_email.split("@")[0]
+                name_part = re.sub(r"\d+", "", name_part)
+                display_name = name_part.capitalize()
 
             print(f"[get_user_info_from_firestore] Found email: {user_email}, displayName: {display_name}")
             return user_email, display_name
 
         elif "@" in user_id:
             print(f"[get_user_info_from_firestore] No Firestore doc, using email prefix fallback.")
-            return user_id.strip(), user_id.split("@")[0].capitalize()
+            name_part = user_id.split("@")[0]
+            name_part = re.sub(r"\d+", "", name_part)
+            display_name = name_part.capitalize()
+            return user_id.strip(), display_name
 
         else:
             print(f"[get_user_info_from_firestore] No Firestore doc and not an email ID.")
@@ -448,7 +455,6 @@ def get_user_info_from_firestore(user_id):
     except Exception as e:
         print("[get_user_info_from_firestore] error:", e)
         return None, "friend"
-
 
 def send_user_support_email(user_email: str, message_text: str, display_name: str = "friend"):
     try:
