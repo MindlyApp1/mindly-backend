@@ -417,78 +417,50 @@ def is_crisis(text: str) -> bool:
 
     return False
 
-def send_crisis_alert_email(user_id: str, message: str):
-    """Send an alert email to the Mindly team when a crisis message is detected."""
-    try:
-        sender_email = os.getenv("ALERT_EMAIL_SENDER")
-        sender_password = os.getenv("ALERT_EMAIL_PASSWORD")
-        recipient_email = sender_email
-
-        if not all([sender_email, sender_password]):
-            print("[CRISIS ALERT] Missing email credentials in environment.")
-            return
-
-        subject = "⚠️ Mindly Crisis Keyword Detected"
-        body = f"""
-        Mindly detected a possible crisis message.
-
-        User ID: {user_id or 'Unknown'}
-        Message:
-        "{message}"
-
-        Timestamp: {datetime.now(timezone.utc).isoformat()}
-
-        Please review this user's session in Firestore to ensure appropriate follow-up.
-        """
-
-        msg = MIMEText(body)
-        msg["Subject"] = subject
-        msg["From"] = sender_email
-        msg["To"] = recipient_email
-
-        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
-            server.login(sender_email, sender_password)
-            server.send_message(msg)
-
-        print("[CRISIS ALERT] Email sent successfully.")
-
-    except Exception as e:
-        print("[CRISIS ALERT ERROR]:", e)
-
-def get_user_email_from_firestore(user_id):
+def get_user_info_from_firestore(user_id):
     """
-    Returns the user's email.
+    Returns a tuple (user_email, display_name).
     Works for both:
-      1) Users whose Firestore document ID *is* their email (e.g., "5@gmail.com")
-      2) Users whose ID is a UID and have an 'email' field in their doc
+      1) Users whose Firestore document ID is their email (e.g., "user@gmail.com")
+      2) Users whose ID is a UID with 'email' and optional 'displayName' or 'name' fields in the doc
     """
     try:
+
         if "@" in user_id and "." in user_id:
-            print(f"[get_user_email_from_firestore] Using document ID as email: {user_id}")
-            return user_id
+            print(f"[get_user_info_from_firestore] Using document ID as email: {user_id}")
+            return user_id.strip(), "friend"
 
         doc_ref = db.collection("users").document(user_id)
         doc = doc_ref.get()
+
         if doc.exists:
             data = doc.to_dict() or {}
-            user_email = data.get("email")
+            user_email = (data.get("email") or "").strip()
+            display_name = (data.get("displayName") or data.get("name") or "friend").strip()
+
             if user_email:
-                print(f"[get_user_email_from_firestore] Found email in Firestore: {user_email}")
-                return user_email
+                print(f"[get_user_info_from_firestore] Found email: {user_email}, displayName: {display_name}")
+                return user_email, display_name
             else:
-                print(f"[get_user_email_from_firestore] No 'email' field for user_id: {user_id}")
+                print(f"[get_user_info_from_firestore] Missing email for user_id: {user_id}")
+                return None, display_name
+
         else:
-            print(f"[get_user_email_from_firestore] No Firestore document for user_id: {user_id}")
+            print(f"[get_user_info_from_firestore] No Firestore document found for user_id: {user_id}")
 
     except Exception as e:
-        print("[get_user_email_from_firestore] error:", e)
+        print("[get_user_info_from_firestore] error:", e)
 
-    return None
+    return None, "friend"
 
-def send_user_support_email(user_email: str, message_text: str, display_name: str = "there"):
+def send_user_support_email(user_email: str, message_text: str, display_name: str = "friend"):
     try:
         sender_email = os.getenv("ALERT_EMAIL_SENDER")
         sender_password = os.getenv("ALERT_EMAIL_PASSWORD")
+
+        if not sender_email or not sender_password:
+            print("[USER SUPPORT EMAIL] Missing Gmail credentials in environment.")
+            return
 
         if not user_email:
             print("[USER SUPPORT EMAIL] No user email found.")
@@ -496,10 +468,12 @@ def send_user_support_email(user_email: str, message_text: str, display_name: st
 
         subject = "URGENT: You are not alone. Help is available"
 
-        greeting = f"Hi {display_name}," if display_name and display_name.lower() != "there" else "Hi there,"
+        if display_name and display_name.lower() not in ["friend", "there"]:
+            greeting = f"Hi {display_name},"
+        else:
+            greeting = "Hi friend,"
 
-        body = f"""
-{greeting}
+        body = f"""{greeting}
 
 We wanted to reach out because it seems like you might be going through a difficult time. Please know that you are not alone and that your feelings are valid and important. Your life has meaning, and there are people who care deeply about you and want to help you through this moment.
 
@@ -519,7 +493,7 @@ The Mindly Team
         msg["X-MSMail-Priority"] = "High"
         msg["Importance"] = "High"
 
-        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=20) as server:
             server.login(sender_email, sender_password)
             server.send_message(msg)
 
@@ -563,11 +537,9 @@ def chat():
         if user_id:
             set_crisis_lockout(user_id)
 
-            send_crisis_alert_email(user_id, user_input)
-
-            user_email = get_user_email_from_firestore(user_id)
+            user_email, display_name = get_user_info_from_firestore(user_id)
             if user_email:
-                send_user_support_email(user_email, user_input)
+                send_user_support_email(user_email, user_input, display_name=display_name)
             else:
                 print("[CRISIS ALERT] No user email found for this user_id.")
         else:
