@@ -935,5 +935,32 @@ def add_email():
         print("[/add-email] error:", e)
         return jsonify({"error": str(e)}), 500
 
+@app.route("/check-vars")
+def check_vars():
+    sender = bool(os.getenv("ALERT_EMAIL_SENDER"))
+    password = bool(os.getenv("ALERT_EMAIL_PASSWORD"))
+    return jsonify({
+        "ALERT_EMAIL_SENDER_found": sender,
+        "ALERT_EMAIL_PASSWORD_found": password
+    })
+
+@app.route("/test-email")
+def test_email():
+    try:
+        sender_email = os.getenv("ALERT_EMAIL_SENDER")
+        sender_password = os.getenv("ALERT_EMAIL_PASSWORD")
+        msg = MIMEText("Render test email from Mindly backend.")
+        msg["Subject"] = "Mindly Email Test"
+        msg["From"] = sender_email
+        msg["To"] = sender_email
+
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+            server.login(sender_email, sender_password)
+            server.send_message(msg)
+        return "✅ Email sent successfully!"
+    except Exception as e:
+        print("[TEST EMAIL ERROR]:", e)
+        return f"❌ Error: {e}"
+
 if __name__ == "__main__":
     app.run(debug=True, port=5050)
